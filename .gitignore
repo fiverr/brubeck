@@ -1,5 +1,8 @@
 brubeck
+brubeck_test
+*.deb
 *.o
+a.out
 *.swp
 *~
 .DS_Store
