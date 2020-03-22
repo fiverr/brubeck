@@ -19,6 +19,7 @@ struct brubeck_histo_sample {
 	value_t sum_90;
 	value_t upper;
 	value_t upper_90;
+	value_t upper_99;
 };
 
 void brubeck_histo_push(struct brubeck_histo *histo, value_t value, value_t sample_rate);

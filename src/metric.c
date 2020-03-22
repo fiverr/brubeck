@@ -223,6 +223,10 @@ histogram__sample(struct brubeck_metric *metric, brubeck_sample_cb sample, void 
 		sample(key, hsample.upper_90, opaque);
 	}
 
+	WITH_SUFFIX(".upper_99") {
+		sample(key, hsample.upper_99, opaque);
+	}
+
 	WITH_SUFFIX(".sum") {
 		sample(key, hsample.sum, opaque);
 	}
