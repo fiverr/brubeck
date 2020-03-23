@@ -91,6 +91,7 @@ void brubeck_histo_sample(
 	histo_sort(histo);
 
 	value_t pct_rank = histo_percentile_rank(histo, 0.9f);
+	value_t pct_rank_99 = histo_percentile_rank(histo, 0.99f);
 
 	sample->count = histo->count;
 	sample->count_90 = floor((histo->count * 0.9) + 0.5f);
@@ -99,6 +100,7 @@ void brubeck_histo_sample(
 	sample->lower = histo->values[0];
 	sample->upper = histo->values[histo->size - 1];
 	sample->upper_90 = histo->values[(size_t)pct_rank - 1];
+	sample->upper_99 = histo->values[(size_t)pct_rank_99 - 1];
 	sample->mean = sample->sum / histo->count;
 	sample->mean_90 = sample->sum_90 / sample->count_90;
 	sample->median = histo_percentile(histo, 0.5f);
