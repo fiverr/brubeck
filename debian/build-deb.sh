@@ -15,16 +15,15 @@ ARCH=$(awk '/Architecture:/ {print $2}' control)
 ROOT=$TMP/brubeck-fiverr_${VER}_${ARCH}
 DEB=$ROOT/DEBIAN
 ETC=$ROOT/etc
+LIB=$ROOT/lib
 BIN=$ROOT/usr/local/bin
 VAR=$ROOT/var
 
 mkdir -p $ETC/init.d $ETC/brubeck/ $ETC/logrotate.d/ $VAR/log/brubeck/ $DEB $BIN
 cp -v control postinst prerm $DEB
 cp -v biz.json tech.json $ETC/brubeck/
-cp -v initd-biz.sh  $ETC/init.d/brubeck-biz
-cp -v initd-tech.sh $ETC/init.d/brubeck-tech
+cp -v brubeck-biz.service brubeck-tech.service $LIB/systemd/system/
 cp -v logrotate $ETC/logrotate.d/brubeck
-chmod +x $ETC/init.d/brubeck-biz $ETC/init.d/brubeck-tech
 cp -v $EXEC $BIN
 
 dpkg-deb --build $ROOT

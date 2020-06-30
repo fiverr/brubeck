@@ -7,8 +7,8 @@ service brubeck-biz  stop
 service brubeck-tech stop
 
 # Remove the daemon
-update-rc.d brubeck-biz  remove -f
-update-rc.d brubeck-tech remove -f
+rm -f /lib/systemd/system/brubeck-biz.service /lib/systemd/system/brubeck-tech.service
+systemctl daemon-reload
 
 # Remove group
 userdel brubeck

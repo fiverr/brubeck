@@ -4,8 +4,9 @@
 useradd brubeck
 
 # Enable the daemon
-update-rc.d brubeck-biz  defaults
-update-rc.d brubeck-tech defaults
+systemctl daemon-reload
+systemctl enable brubeck-biz
+systemctl enable brubeck-tech
 
 # Start the service
 service brubeck-biz  start
