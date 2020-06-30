@@ -19,7 +19,7 @@ LIB=$ROOT/lib
 BIN=$ROOT/usr/local/bin
 VAR=$ROOT/var
 
-mkdir -p $ETC/init.d $ETC/brubeck/ $ETC/logrotate.d/ $VAR/log/brubeck/ $DEB $BIN
+mkdir -p $ETC/init.d $ETC/brubeck/ $ETC/logrotate.d/ $VAR/log/brubeck/ $LIB/systemd/system/ $DEB $BIN
 cp -v control postinst prerm $DEB
 cp -v biz.json tech.json $ETC/brubeck/
 cp -v brubeck-biz.service brubeck-tech.service $LIB/systemd/system/
