@@ -1,0 +1,11 @@
+[Unit]
+Description=Systemd unit for brubeck-tech
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/brubeck --config=/etc/brubeck/tech.json --log=/var/log/brubeck/tech.log
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

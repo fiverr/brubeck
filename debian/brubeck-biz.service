@@ -1,0 +1,11 @@
+[Unit]
+Description=Systemd unit for brubeck-biz
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/brubeck --config=/etc/brubeck/biz.json --log=/var/log/brubeck/biz.log
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
