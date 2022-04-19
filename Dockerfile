@@ -13,3 +13,5 @@ RUN apk add --no-cache jansson libmicrohttpd libressl
 WORKDIR /usr/sbin/
 COPY --from=build-env /tmp/brubeck/brubeck /usr/sbin/
 COPY --from=build-env /tmp/brubeck/debian/biz.json /tmp/brubeck/debian/tech.json /etc/brubeck/
+
+ENTRYPOINT [ "/usr/sbin/brubeck" ]
