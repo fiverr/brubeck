@@ -1,4 +1,4 @@
-FROM alpine:latest AS build-env
+FROM alpine:3.13 AS build-env
 RUN apk add -qU alpine-sdk jansson-dev libmicrohttpd-dev libressl-dev
 
 # build
@@ -8,8 +8,10 @@ RUN ./script/cibuild
 
 
 # final stage
-FROM alpine
+FROM alpine:3.13
 RUN apk add --no-cache jansson libmicrohttpd libressl
 WORKDIR /usr/sbin/
 COPY --from=build-env /tmp/brubeck/brubeck /usr/sbin/
 COPY --from=build-env /tmp/brubeck/debian/biz.json /tmp/brubeck/debian/tech.json /etc/brubeck/
+
+ENTRYPOINT [ "/usr/sbin/brubeck" ]
