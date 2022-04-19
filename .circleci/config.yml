@@ -1,5 +1,4 @@
 version: 2.1
-
 jobs:
   release:
     parameters:
@@ -45,7 +44,6 @@ jobs:
           command: |
             /var/tmp/kubernetes/scripts/ci/create_version_name.sh
             /var/tmp/kubernetes/scripts/ci/push_manifest.sh "--platform amd64 --platform arm64"
-
 workflows:
   version: 2
   ci-cd:
