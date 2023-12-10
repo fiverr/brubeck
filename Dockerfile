@@ -13,5 +13,7 @@ RUN apk add --no-cache jansson libmicrohttpd libressl
 WORKDIR /usr/sbin/
 COPY --from=build-env /tmp/brubeck/brubeck /usr/sbin/
 COPY --from=build-env /tmp/brubeck/debian/biz.json /tmp/brubeck/debian/tech.json /etc/brubeck/
+COPY bizsleeper.sh /usr/sbin/
+RUN chmod 777 /usr/sbin/bizsleeper.sh
 
 ENTRYPOINT [ "/usr/sbin/brubeck" ]
