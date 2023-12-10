@@ -16,7 +16,7 @@ jobs:
           name: Load CI Scripts
           command: |
             git clone git@github.com:fiverr/kubernetes.git /var/tmp/kubernetes
-            pip3 install -U fiverrci==0.5.3 --extra-index-url $FIVERR_PYPI_ENDPOINT
+            /var/tmp/kubernetes/scripts/ci/install_fiverrci.sh
             echo "export FIVERRCI_BUILDKIT=1" >> $BASH_ENV
       - run:
           name: Prepare docker version
