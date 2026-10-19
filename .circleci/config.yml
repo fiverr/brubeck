@@ -9,7 +9,7 @@ jobs:
     resource_class: << parameters.resource_class >>
     working_directory: ~/app
     machine:
-      image: ubuntu-2004:202101-01
+      image: default
     steps:
       - checkout
       - run:
@@ -38,7 +38,7 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker:
-          version: 20.10.11
+          version: docker24
       - run:
           name: Push/Publish Image Manifest
           command: |
