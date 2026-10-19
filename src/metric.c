@@ -5,9 +5,8 @@ new_metric(struct brubeck_server *server, const char *key, size_t key_len, uint8
 {
 	struct brubeck_metric *metric;
 
-	/* slab allocation cannot fail */
-	metric = brubeck_slab_alloc(&server->slab,
-		sizeof(struct brubeck_metric) + key_len + 1);
+	/* malloc'd, not slab-allocated, so purged metrics can be freed (xmalloc cannot fail) */
+	metric = xmalloc(sizeof(struct brubeck_metric) + key_len + 1);
 
 	memset(metric, 0x0, sizeof(struct brubeck_metric));
 
@@ -21,13 +20,19 @@ new_metric(struct brubeck_server *server, const char *key, size_t key_len, uint8
 
 #ifdef BRUBECK_METRICS_FLOW
 	metric->flow = 0;
-#else
-	/* Compile time assert: ensure that the metric struct can be packed
-	 * in a single slab */
-	ct_assert(sizeof(struct brubeck_metric) <= (SLAB_SIZE));
 #endif
 
 	return metric;
+}
+
+void
+brubeck_metric_free(struct brubeck_metric *metric)
+{
+	if (metric->type == BRUBECK_MT_HISTO || metric->type == BRUBECK_MT_TIMER)
+		free(metric->as.histogram.values);
+
+	pthread_spin_destroy(&metric->lock);
+	free(metric);
 }
 
 typedef void (*mt_prototype_record)(struct brubeck_metric *, value_t, value_t, uint8_t);

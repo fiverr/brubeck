@@ -13,6 +13,36 @@ void brubeck_backend_register_metric(struct brubeck_backend *self, struct brubec
 	}
 }
 
+/* Unlinks purged metrics from the queue and frees the ones unlinked on the previous flush.
+ * Only this thread walks or unlinks queue nodes; workers only push new metrics at the head
+ * (CAS on self->queue), so the head node is never unlinked here, only the ones after it. */
+static void reap_purged(struct brubeck_backend *self)
+{
+	struct brubeck_metric *mt, *prev, *next;
+
+	for (mt = self->to_free; mt; mt = next) {
+		next = mt->next;
+		brubeck_metric_free(mt);
+	}
+	self->to_free = self->unlinked;
+	self->unlinked = NULL;
+
+	prev = self->queue;
+	if (!prev)
+		return;
+
+	for (mt = prev->next; mt; mt = next) {
+		next = mt->next;
+		if (__atomic_load_n(&mt->purged, __ATOMIC_ACQUIRE)) {
+			prev->next = next;
+			mt->next = self->unlinked;
+			self->unlinked = mt;
+		} else {
+			prev = mt;
+		}
+	}
+}
+
 static void *backend__thread(void *_ptr)
 {
 	struct brubeck_backend *self = (struct brubeck_backend *)_ptr;
@@ -30,13 +60,16 @@ static void *backend__thread(void *_ptr)
 			self->tick_time = now.tv_sec;
 
 			for (mt = self->queue; mt; mt = mt->next) {
-				if (mt->expire > BRUBECK_EXPIRE_DISABLED)
+				if (mt->expire > BRUBECK_EXPIRE_DISABLED &&
+				    !__atomic_load_n(&mt->purged, __ATOMIC_ACQUIRE))
 					brubeck_metric_sample(mt, self->sample, self);
 			}
 
 			if (self->flush)
 				self->flush(self);
 		}
+
+		reap_purged(self);
 
 		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &then, NULL);
 	}

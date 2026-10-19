@@ -35,6 +35,10 @@ struct brubeck_server {
 	brubeck_hashtable_t *metrics;
 	int at_capacity;
 
+	/* expire ticks a DISABLED metric is kept before it's deleted; 0 = never */
+	int purge_after;
+	int purge_gauges_after;
+
 	struct brubeck_sampler *samplers[8];
 	struct brubeck_backend *backends[8];
 

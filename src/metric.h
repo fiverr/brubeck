@@ -39,6 +39,8 @@ struct brubeck_metric {
 	uint16_t key_len;
 	uint8_t type;
 	uint8_t expire;
+	uint8_t purged;		/* removed from the hashtable; its backend unlinks and frees it */
+	uint16_t idle_ticks;	/* expire ticks spent DISABLED */
 
 	union {
 		struct {
@@ -65,6 +67,7 @@ void brubeck_metric_record(struct brubeck_metric *metric, value_t value, value_t
 struct brubeck_metric *brubeck_metric_new(struct brubeck_server *server, const char *, size_t, uint8_t);
 struct brubeck_metric *brubeck_metric_find(struct brubeck_server *server, const char *, size_t, uint8_t);
 struct brubeck_backend *brubeck_metric_shard(struct brubeck_server *server, struct brubeck_metric *);
+void brubeck_metric_free(struct brubeck_metric *metric);
 
 #define WITH_SUFFIX(suffix) memcpy(key + metric->key_len, suffix, strlen(suffix) + 1);
 
