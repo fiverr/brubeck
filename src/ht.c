@@ -18,6 +18,11 @@ ht_malloc(size_t r)
 static void
 ht_free(void *p, size_t b, bool r)
 {
+	/* r (defer) is set when ck_ht replaces its map on growth: worker threads may still be
+	 * probing the old map without a lock, so it can't be freed now. It's kept instead;
+	 * the old maps of a doubling table add up to less than the live one. */
+	if (r)
+		return;
 	free(p);
 }
 
@@ -77,6 +82,32 @@ brubeck_hashtable_insert(brubeck_hashtable_t *ht, const char *key, uint16_t key_
 	pthread_mutex_unlock(&ht->write_mutex);
 
 	return result;
+}
+
+bool
+brubeck_hashtable_remove(brubeck_hashtable_t *ht, const char *key, uint16_t key_len)
+{
+	ck_ht_hash_t h;
+	ck_ht_entry_t entry;
+	bool result;
+
+	ck_ht_hash(&h, &ht->table, key, key_len);
+	ck_ht_entry_key_set(&entry, key, key_len);
+
+	pthread_mutex_lock(&ht->write_mutex);
+	result = ck_ht_remove_spmc(&ht->table, h, &entry);
+	pthread_mutex_unlock(&ht->write_mutex);
+
+	return result;
+}
+
+/* Moves entries into the tombstones left by removals, so probe chains stay short */
+void
+brubeck_hashtable_gc(brubeck_hashtable_t *ht)
+{
+	pthread_mutex_lock(&ht->write_mutex);
+	ck_ht_gc(&ht->table, 0, lrand48());
+	pthread_mutex_unlock(&ht->write_mutex);
 }
 
 size_t

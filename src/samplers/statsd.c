@@ -274,11 +274,13 @@ void brubeck_statsd_packet_parse(struct brubeck_server *server, char *buffer, ch
 */
 
 		return_code = brubeck_statsd_msg_parse(&msg, buffer, stat_end);
+		if (return_code == 0)
+			return_code = add_prefix(&msg, key_prefix);
+
 		if (return_code < 0) {
 			brubeck_stats_inc(server, errors);
 			log_splunk("sampler=statsd event=packet_drop return_code=%d key=%s", return_code, buffer);
 		} else {
-			add_prefix(&msg, key_prefix);
 /*
 			if (strstr(msg.key, "/") != NULL) {
 				log_splunk("sampler=statsd event=debug buffer=%s", msg.key);
@@ -305,9 +307,14 @@ char *type2prefix(uint8_t type) {
     }
 }
 
-void add_prefix(struct brubeck_statsd_msg *msg, struct key_prefix *key_prefix) {
+int add_prefix(struct brubeck_statsd_msg *msg, struct key_prefix *key_prefix) {
 	char *type_prefix = type2prefix(msg->type);
 	size_t type_prefix_len = strlen(type_prefix);
+
+	/* the prefixed key and its NUL must fit in key_prefix->str: drop the metric otherwise,
+	 * writing past it overwrites str_len and corrupts every later key on this worker */
+	if (key_prefix->str_len + type_prefix_len + msg->key_len >= sizeof(key_prefix->str))
+		return -10;
 
 	memcpy(key_prefix->str + key_prefix->str_len, type_prefix, type_prefix_len);
 	memcpy(key_prefix->str + key_prefix->str_len + type_prefix_len, msg->key, msg->key_len);
@@ -315,6 +322,7 @@ void add_prefix(struct brubeck_statsd_msg *msg, struct key_prefix *key_prefix) {
 
 	msg->key = key_prefix->str;
 	msg->key_len = (uint16_t)(msg->key_len + key_prefix->str_len + type_prefix_len);
+	return 0;
 }
 
 static void *statsd__thread(void *_in)

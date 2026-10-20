@@ -63,14 +63,82 @@ update_proctitle(struct brubeck_server *server)
 	setproctitle("brubeck", buf);
 }
 
+struct purge_list {
+	struct brubeck_server *server;
+	struct brubeck_metric **items;
+	size_t len, alloc;
+};
+
 static void
-expire_metric(struct brubeck_metric *mt, void *_)
+expire_metric(struct brubeck_metric *mt, void *_purge)
 {
+	struct purge_list *purge = _purge;
+	int limit;
+
 	/* If this metric is not disabled, turn "inactive"
 	 * into "disabled" and "active" into "inactive"
 	 */
-	if (mt->expire > BRUBECK_EXPIRE_DISABLED)
-		mt->expire = mt->expire - 1;
+	uint8_t cur = __atomic_load_n(&mt->expire, __ATOMIC_ACQUIRE);
+
+	if (cur == BRUBECK_EXPIRE_ACTIVE || cur == BRUBECK_EXPIRE_INACTIVE) {
+		/* if a worker activates it at the same moment, its ACTIVE wins */
+		__atomic_compare_exchange_n(&mt->expire, &cur, cur - 1,
+			false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+		mt->idle_ticks = 0;
+		return;
+	}
+
+	if (cur != BRUBECK_EXPIRE_DISABLED)
+		return;
+
+	if (mt->type == BRUBECK_MT_INTERNAL_STATS)
+		return;
+
+	limit = (mt->type == BRUBECK_MT_GAUGE) ?
+		purge->server->purge_gauges_after : purge->server->purge_after;
+
+	if (limit <= 0 || ++mt->idle_ticks < limit)
+		return;
+
+	if (purge->len == purge->alloc) {
+		purge->alloc = purge->alloc ? purge->alloc * 2 : 1024;
+		purge->items = xrealloc(purge->items, purge->alloc * sizeof(*purge->items));
+	}
+	purge->items[purge->len++] = mt;
+}
+
+/* Deletes metrics that stayed DISABLED for purge_after (gauges: purge_gauges_after) expire
+ * ticks. Brubeck used to keep every key it ever saw, so memory and the expire walk grew
+ * until a restart. A purged metric is marked PURGED and removed from the hashtable here: a new
+ * update creates a fresh one, and the backend thread unlinks and frees it a flush later. */
+static void
+expire_metrics(struct brubeck_server *server)
+{
+	struct purge_list purge = { server, NULL, 0, 0 };
+	size_t i, purged = 0;
+
+	brubeck_hashtable_foreach(server->metrics, &expire_metric, &purge);
+
+	for (i = 0; i < purge.len; ++i) {
+		struct brubeck_metric *mt = purge.items[i];
+		uint8_t disabled = BRUBECK_EXPIRE_DISABLED;
+
+		/* races with brubeck_metric_activate(): if new data arrived since the walk,
+		 * the worker's CAS went first and the metric stays */
+		if (!__atomic_compare_exchange_n(&mt->expire, &disabled, BRUBECK_EXPIRE_PURGED,
+				false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+			continue;
+
+		brubeck_hashtable_remove(server->metrics, mt->key, mt->key_len);
+		brubeck_atomic_dec(&server->internal_stats.live.unique_keys);
+		purged++;
+	}
+
+	if (purged)
+		brubeck_hashtable_gc(server->metrics);
+
+	log_splunk("event=expire_metrics purged=%zu", purged);
+	free(purge.items);
 }
 
 static void
@@ -205,14 +273,19 @@ static void load_config(struct brubeck_server *server, const char *path)
 	}
 
 	json_unpack_or_die(server->config,
-		"{s?:s, s:s, s:i, s:o, s:o, s?:s, s?:i}",
+		"{s?:s, s:s, s:i, s:o, s:o, s?:s, s?:i, s?:i, s?:i}",
 		"server_name", &server->name,
 		"dumpfile", &server->dump_path,
 		"capacity", &capacity,
 		"backends", &backends,
 		"samplers", &samplers,
 		"http", &http,
-		"expire", &expire);
+		"expire", &expire,
+		"purge_after", &server->purge_after,
+		"purge_gauges_after", &server->purge_gauges_after);
+
+	if (server->purge_after > UINT16_MAX || server->purge_gauges_after > UINT16_MAX)
+		die("purge_after / purge_gauges_after must be at most %d expire ticks", UINT16_MAX);
 
 	gh_log_set_instance(server->name);
 
@@ -316,10 +389,8 @@ int brubeck_server_run(struct brubeck_server *server)
 			update_proctitle(server);
 		}
 
-		if (timer_elapsed(&fds[2])) {
-			log_splunk("event=expire_metrics");
-			brubeck_hashtable_foreach(server->metrics, &expire_metric, NULL);
-		}
+		if (timer_elapsed(&fds[2]))
+			expire_metrics(server);
 	}
 
 	for (i = 0; i < server->active_backends; ++i)

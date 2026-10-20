@@ -9,7 +9,7 @@ jobs:
     resource_class: << parameters.resource_class >>
     working_directory: ~/app
     machine:
-      image: ubuntu-2004:202101-01
+      image: default
     steps:
       - checkout
       - run:
@@ -22,11 +22,10 @@ jobs:
           name: Prepare docker version
           command: /var/tmp/kubernetes/scripts/ci/create_version_name.sh
       - run:
-          name: Docker build
-          command: /var/tmp/kubernetes/scripts/ci/build_version.sh
-      - run:
-          name: Docker push
-          command: /var/tmp/kubernetes/scripts/ci/push_version_multiarch.sh
+          name: Docker build and push
+          command: |
+            export EXTRA_FIVERRCI_ARGS="--append-arch-suffix"
+            /var/tmp/kubernetes/scripts/ci/build_version.sh
 
   release_manifest:
     working_directory: ~/app
@@ -38,12 +37,12 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker:
-          version: 20.10.11
+          version: docker24
       - run:
           name: Push/Publish Image Manifest
           command: |
             /var/tmp/kubernetes/scripts/ci/create_version_name.sh
-            /var/tmp/kubernetes/scripts/ci/push_manifest.sh "--platform amd64 --platform arm64"
+            /var/tmp/kubernetes/scripts/ci/push_manifestx.sh
 workflows:
   version: 2
   ci-cd:

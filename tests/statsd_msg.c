@@ -85,3 +85,34 @@ void test_statsd_msg__parse_strings(void)
 	must_sanitize_key("replace.slash.in.key/name:1|c","replace.slash.in.key-name");
 	must_sanitize_key("remove.non.alphanumeric.chars.from.key*#name:1|c","remove.non.alphanumeric.chars.from.keyname");
 }
+
+static int prefixed(const char *prefix, uint8_t type, int key_len)
+{
+	struct key_prefix kp;
+	struct brubeck_statsd_msg msg;
+	char key[300];
+	int rc;
+
+	strcpy(kp.str, prefix);
+	kp.str_len = strlen(prefix);
+	memset(key, 'a', key_len);
+	key[key_len] = '\0';
+	msg.key = key;
+	msg.key_len = key_len;
+	msg.type = type;
+
+	rc = add_prefix(&msg, &kp);
+	sput_fail_unless(kp.str_len == strlen(prefix), "prefix length intact");
+	return rc;
+}
+
+void test_statsd_msg__add_prefix(void)
+{
+	/* "<prefix><type>.<key>" must stay under 256 chars */
+	sput_fail_unless(prefixed("tech.", BRUBECK_MT_COUNTER, 241) == 0, "tech counter, key 241: kept");
+	sput_fail_unless(prefixed("tech.", BRUBECK_MT_COUNTER, 242) == -10, "tech counter, key 242: dropped");
+	sput_fail_unless(prefixed("tech.", BRUBECK_MT_TIMER, 243) == 0, "tech timer, key 243: kept");
+	sput_fail_unless(prefixed("tech.", BRUBECK_MT_TIMER, 244) == -10, "tech timer, key 244: dropped");
+	sput_fail_unless(prefixed("biz.", BRUBECK_MT_GAUGE, 244) == 0, "biz gauge, key 244: kept");
+	sput_fail_unless(prefixed("biz.", BRUBECK_MT_GAUGE, 255) == -10, "biz gauge, key 255: dropped");
+}
