@@ -78,11 +78,18 @@ expire_metric(struct brubeck_metric *mt, void *_purge)
 	/* If this metric is not disabled, turn "inactive"
 	 * into "disabled" and "active" into "inactive"
 	 */
-	if (mt->expire > BRUBECK_EXPIRE_DISABLED) {
-		mt->expire = mt->expire - 1;
+	uint8_t cur = __atomic_load_n(&mt->expire, __ATOMIC_ACQUIRE);
+
+	if (cur == BRUBECK_EXPIRE_ACTIVE || cur == BRUBECK_EXPIRE_INACTIVE) {
+		/* if a worker activates it at the same moment, its ACTIVE wins */
+		__atomic_compare_exchange_n(&mt->expire, &cur, cur - 1,
+			false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
 		mt->idle_ticks = 0;
 		return;
 	}
+
+	if (cur != BRUBECK_EXPIRE_DISABLED)
+		return;
 
 	if (mt->type == BRUBECK_MT_INTERNAL_STATS)
 		return;
@@ -102,8 +109,8 @@ expire_metric(struct brubeck_metric *mt, void *_purge)
 
 /* Deletes metrics that stayed DISABLED for purge_after (gauges: purge_gauges_after) expire
  * ticks. Brubeck used to keep every key it ever saw, so memory and the expire walk grew
- * until a restart. A purged metric is only removed from the hashtable here: a new update
- * recreates it, and its backend thread unlinks it and frees it a full flush later. */
+ * until a restart. A purged metric is marked PURGED and removed from the hashtable here: a new
+ * update creates a fresh one, and the backend thread unlinks and frees it a flush later. */
 static void
 expire_metrics(struct brubeck_server *server)
 {
@@ -114,16 +121,17 @@ expire_metrics(struct brubeck_server *server)
 
 	for (i = 0; i < purge.len; ++i) {
 		struct brubeck_metric *mt = purge.items[i];
+		uint8_t disabled = BRUBECK_EXPIRE_DISABLED;
 
-		/* skip it if new data arrived since the walk */
-		if (mt->expire != BRUBECK_EXPIRE_DISABLED)
+		/* races with brubeck_metric_activate(): if new data arrived since the walk,
+		 * the worker's CAS went first and the metric stays */
+		if (!__atomic_compare_exchange_n(&mt->expire, &disabled, BRUBECK_EXPIRE_PURGED,
+				false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
 			continue;
 
-		if (brubeck_hashtable_remove(server->metrics, mt->key, mt->key_len)) {
-			__atomic_store_n(&mt->purged, 1, __ATOMIC_RELEASE);
-			brubeck_atomic_dec(&server->internal_stats.live.unique_keys);
-			purged++;
-		}
+		brubeck_hashtable_remove(server->metrics, mt->key, mt->key_len);
+		brubeck_atomic_dec(&server->internal_stats.live.unique_keys);
+		purged++;
 	}
 
 	if (purged)

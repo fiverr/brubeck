@@ -12,6 +12,7 @@ void test_histogram__capacity(void);
 
 void test_mstore__save(void);
 void test_mstore__remove(void);
+void test_mstore__activate_vs_purge(void);
 void test_atomic_spinlocks(void);
 void test_ftoa(void);
 void test_statsd_msg__parse_strings(void);
@@ -32,6 +33,7 @@ int main(int argc, char *argv[])
 	sput_enter_suite("mstore: concurrency test for metrics hash table");
 	sput_run_test(test_mstore__save);
 	sput_run_test(test_mstore__remove);
+	sput_run_test(test_mstore__activate_vs_purge);
 
 	sput_enter_suite("atomic: atomic primitives");
 	sput_run_test(test_atomic_spinlocks);

@@ -87,3 +87,27 @@ void test_mstore__remove(void)
 	sput_fail_unless(i >= nmetrics, "removed metrics can be inserted again");
 	sput_fail_unless(brubeck_hashtable_size(store) == nmetrics, "table full again");
 }
+
+void test_mstore__activate_vs_purge(void)
+{
+	struct brubeck_metric *metric = new_metric("github.test.purge");
+	uint8_t disabled;
+
+	metric->expire = BRUBECK_EXPIRE_DISABLED;
+	sput_fail_unless(brubeck_metric_activate(metric), "disabled metric can be activated");
+	sput_fail_unless(metric->expire == BRUBECK_EXPIRE_ACTIVE, "activation sets ACTIVE");
+
+	/* the expire tick's CAS fails once a worker has activated the metric */
+	disabled = BRUBECK_EXPIRE_DISABLED;
+	sput_fail_unless(!__atomic_compare_exchange_n(&metric->expire, &disabled, BRUBECK_EXPIRE_PURGED,
+		false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE), "active metric is not purged");
+
+	/* and once purged, a worker can't revive it */
+	metric->expire = BRUBECK_EXPIRE_DISABLED;
+	disabled = BRUBECK_EXPIRE_DISABLED;
+	sput_fail_unless(__atomic_compare_exchange_n(&metric->expire, &disabled, BRUBECK_EXPIRE_PURGED,
+		false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE), "disabled metric is purged");
+	sput_fail_unless(!brubeck_metric_activate(metric), "purged metric can't be activated");
+	sput_fail_unless(!brubeck_metric_is_live(metric), "purged metric is not sent");
+	free(metric);
+}

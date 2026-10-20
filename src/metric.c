@@ -1,3 +1,4 @@
+#include <sched.h>
 #include "brubeck.h"
 
 static inline struct brubeck_metric *
@@ -328,8 +329,11 @@ brubeck_metric_new(struct brubeck_server *server, const char *key, size_t key_le
 	if (!metric)
 		return NULL;
 
-	if (!brubeck_hashtable_insert(server->metrics, metric->key, metric->key_len, metric))
+	if (!brubeck_hashtable_insert(server->metrics, metric->key, metric->key_len, metric)) {
+		/* another worker inserted this key first; ours was never published */
+		brubeck_metric_free(metric);
 		return brubeck_hashtable_find(server->metrics, key, key_len);
+	}
 
 	brubeck_backend_register_metric(brubeck_metric_shard(server, metric), metric);
 
@@ -344,19 +348,29 @@ brubeck_metric_find(struct brubeck_server *server, const char *key, size_t key_l
 	struct brubeck_metric *metric;
 
 	assert(key[key_len] == '\0');
-	metric = brubeck_hashtable_find(server->metrics, key, (uint16_t)key_len);
 
-	if (unlikely(metric == NULL)) {
-		if (server->at_capacity)
-			return NULL;
+	for (;;) {
+		metric = brubeck_hashtable_find(server->metrics, key, (uint16_t)key_len);
 
-		return brubeck_metric_new(server, key, key_len, type);
+		if (unlikely(metric == NULL)) {
+			if (server->at_capacity)
+				return NULL;
+
+			metric = brubeck_metric_new(server, key, key_len, type);
+			if (metric == NULL)
+				continue;	/* lost an insert race to a metric that was then purged */
+		}
+
+		/* fails only while the expire tick is purging this metric: it's removed from
+		 * the table right after, so the next lookup creates a fresh one */
+		if (brubeck_metric_activate(metric))
+			break;
+		sched_yield();
 	}
 
 #ifdef BRUBECK_METRICS_FLOW
 	brubeck_atomic_inc(&metric->flow);
 #endif
 
-	metric->expire = BRUBECK_EXPIRE_ACTIVE;
 	return metric;
 }

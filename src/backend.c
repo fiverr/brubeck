@@ -33,7 +33,7 @@ static void reap_purged(struct brubeck_backend *self)
 
 	for (mt = prev->next; mt; mt = next) {
 		next = mt->next;
-		if (__atomic_load_n(&mt->purged, __ATOMIC_ACQUIRE)) {
+		if (__atomic_load_n(&mt->expire, __ATOMIC_ACQUIRE) == BRUBECK_EXPIRE_PURGED) {
 			prev->next = next;
 			mt->next = self->unlinked;
 			self->unlinked = mt;
@@ -60,8 +60,7 @@ static void *backend__thread(void *_ptr)
 			self->tick_time = now.tv_sec;
 
 			for (mt = self->queue; mt; mt = mt->next) {
-				if (mt->expire > BRUBECK_EXPIRE_DISABLED &&
-				    !__atomic_load_n(&mt->purged, __ATOMIC_ACQUIRE))
+				if (brubeck_metric_is_live(mt))
 					brubeck_metric_sample(mt, self->sample, self);
 			}
 
