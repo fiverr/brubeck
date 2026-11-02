@@ -20,6 +20,10 @@ struct brubeck_backend {
 	pthread_t thread;
 
 	struct brubeck_metric *queue;
+
+	/* purged metrics unlinked from queue: freed one flush later, so a worker that
+	 * looked one up just before it was purged is long done with it */
+	struct brubeck_metric *unlinked, *to_free;
 };
 
 void brubeck_backend_run_threaded(struct brubeck_backend *);

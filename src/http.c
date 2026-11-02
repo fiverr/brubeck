@@ -63,7 +63,11 @@ expire_metric(struct brubeck_server *server, const char *url)
 			server, url + strlen("/expire/"));
 
 	if (metric) {
-		metric->expire = BRUBECK_EXPIRE_DISABLED;
+		uint8_t cur = __atomic_load_n(&metric->expire, __ATOMIC_ACQUIRE);
+		while (cur != BRUBECK_EXPIRE_PURGED &&
+		       !__atomic_compare_exchange_n(&metric->expire, &cur, BRUBECK_EXPIRE_DISABLED,
+				false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+			;
 		return MHD_create_response_from_data(
 				0, "", 0, 0);
 	}
@@ -77,7 +81,7 @@ send_metric(struct brubeck_server *server, const char *url)
 		"gauge", "meter", "counter", "histogram", "timer", "internal"
 	};
 	static const char *expire_status[] = {
-		"disabled", "inactive", "active"
+		"disabled", "inactive", "active", "purged"
 	};
 
 	struct brubeck_metric *metric = safe_lookup_metric(

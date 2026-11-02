@@ -43,6 +43,6 @@ struct brubeck_sampler * brubeck_statsd_secure_new(struct brubeck_server *server
 struct brubeck_sampler *brubeck_statsd_new(struct brubeck_server *server, json_t *settings);
 
 char * type2prefix(uint8_t type);
-void add_prefix(struct brubeck_statsd_msg *msg, struct key_prefix *key_prefix);
+int add_prefix(struct brubeck_statsd_msg *msg, struct key_prefix *key_prefix);
 
 #endif

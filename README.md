@@ -97,6 +97,14 @@ The JSON file can contain the following sections:
     Interfacing with the daemon)
 
 - `http`: if existing, this string sets the listen address and port for the HTTP API
+
+- `expire`: seconds between expire ticks. Each tick moves a metric with no new data from
+    active to inactive, then to disabled; disabled metrics are no longer sent to the backend.
+
+- `purge_after`, `purge_gauges_after`: expire ticks a disabled metric (gauges: a disabled gauge)
+    is kept before it is deleted from memory. `0` (the default) keeps it forever, which grows
+    memory with every new key until a restart. A deleted metric that gets new data is created
+    again; a deleted gauge forgets its last value, so a relative update (`+N|g`) starts from 0.
     
 - `backends`: an array of the different backends to load. If more than one backend is loaded,
     brubeck will function in sharding mode, distributing aggregation load evenly through all

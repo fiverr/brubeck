@@ -4,6 +4,8 @@
   "dumpfile" : "./brubeck.dump",
   "capacity" : 15,
   "expire" : 20,
+  "purge_after" : 1,
+  "purge_gauges_after" : 4320,
   "http" : ":8080",
 
   "backends" : [
